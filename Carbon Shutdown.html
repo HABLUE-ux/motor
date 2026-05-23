@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>정기보수 통합 관리</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+  :root{
+    --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3450;
+    --accent:#3d6fff;--red:#ff4d6d;--green:#06d6a0;--yellow:#ffd166;--orange:#f4a261;
+    --text:#e8eaf6;--text2:#8b92b8;--text3:#555e8a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+
+  .header{background:linear-gradient(135deg,#1a1d27,#22263a);border-bottom:1px solid var(--border);padding:16px;position:sticky;top:0;z-index:100}
+  .header h1{font-size:18px;font-weight:700}
+  .header p{font-size:11px;color:var(--text2);margin-top:2px}
+
+  .main-tabs{display:flex;background:var(--surface);border-bottom:2px solid var(--border);position:sticky;top:65px;z-index:99}
+  .main-tab{flex:1;padding:13px 8px;text-align:center;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;border-bottom:3px solid transparent;transition:all .2s}
+  .main-tab.active.motor{color:var(--accent);border-bottom-color:var(--accent);background:rgba(61,111,255,.07)}
+  .main-tab.active.task{color:var(--green);border-bottom-color:var(--green);background:rgba(6,214,160,.07)}
+
+  .sub-tabs{display:flex;background:var(--surface2);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;position:sticky;top:114px;z-index:98}
+  .sub-tabs::-webkit-scrollbar{display:none}
+  .sub-tab{flex:0 0 auto;padding:10px 14px;font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
+  .sub-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .sub-tab-gear{padding:10px 12px;font-size:15px;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;flex-shrink:0}
+
+  .summary{display:flex;gap:8px;padding:12px 12px 0;overflow-x:auto;scrollbar-width:none}
+  .summary::-webkit-scrollbar{display:none}
+  .stat-card{flex:1;min-width:78px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center}
+  .stat-card .num{font-size:20px;font-weight:900}
+  .stat-card .lbl{font-size:10px;color:var(--text2);margin-top:2px}
+  .stat-card.total .num{color:var(--accent)}
+  .stat-card.out .num{color:var(--red)}
+  .stat-card.in .num{color:var(--green)}
+  .stat-card.done .num{color:var(--green)}
+  .stat-card.remain .num{color:var(--yellow)}
+
+  .progress-wrap{padding:10px 12px 0}
+  .progress-bar-bg{background:var(--surface2);border-radius:99px;height:6px;overflow:hidden}
+  .progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:99px;transition:width .4s}
+  .progress-label{font-size:10px;color:var(--text2);margin-top:4px;text-align:right}
+
+  .controls{padding:10px 12px}
+  .search-box{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none}
+  .search-box:focus{border-color:var(--accent)}
+  .search-box::placeholder{color:var(--text3)}
+
+  .item-list{padding:0 12px 100px}
+
+  /* 전동기 카드 */
+  .motor-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;overflow:hidden}
+  .motor-card.exported{border-left:3px solid var(--red)}
+  .motor-card.imported{border-left:3px solid var(--green)}
+  .motor-card.has-note{border-right:3px solid var(--orange)}
+  .motor-header{display:flex;align-items:center;padding:12px;gap:10px;cursor:pointer;user-select:none}
+  .motor-name{font-size:14px;font-weight:700}
+  .motor-sub{font-size:10px;color:var(--text3);margin-top:2px}
+  .motor-note-preview{font-size:10px;color:var(--red);margin-top:2px;font-weight:600}
+  .motor-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+  .badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap}
+  .badge.out{background:rgba(255,77,109,.15);color:var(--red);border:1px solid rgba(255,77,109,.3)}
+  .badge.in{background:rgba(6,214,160,.15);color:var(--green);border:1px solid rgba(6,214,160,.3)}
+  .badge.none{background:rgba(139,146,184,.1);color:var(--text2);border:1px solid var(--border)}
+  .motor-body{padding:0 12px 12px;border-top:1px solid var(--border);display:none}
+  .motor-body.open{display:block}
+  .edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .edit-item label{font-size:10px;color:var(--text3);display:block;margin-bottom:3px}
+  .edit-item input,.edit-item textarea,.edit-item select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;color:var(--text);font-size:13px;font-family:inherit;outline:none;resize:none;-webkit-appearance:none}
+  .edit-item input:focus,.edit-item textarea:focus,.edit-item select:focus{border-color:var(--accent)}
+  .edit-item.full{grid-column:1/-1}
+  .note-input{border-color:rgba(244,162,97,.4) !important;background:rgba(244,162,97,.05) !important}
+  .note-input:focus{border-color:var(--orange) !important}
+  .status-info{margin-top:8px;font-size:11px;color:var(--text2);padding:6px 8px;background:var(--surface2);border-radius:6px}
+  .status-info span.red{color:var(--red)}
+  .status-info span.green{color:var(--green)}
+  .action-row{display:flex;gap:8px;margin-top:10px}
+  .btn{flex:1;padding:9px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+  .btn-out{background:rgba(255,77,109,.15);color:var(--red);border:1px solid rgba(255,77,109,.3)}
+  .btn-in{background:rgba(6,214,160,.15);color:var(--green);border:1px solid rgba(6,214,160,.3)}
+  .btn-save{background:rgba(61,111,255,.15);color:var(--accent);border:1px solid rgba(61,111,255,.3)}
+  .btn-reset{background:rgba(139,146,184,.1);color:var(--text2);border:1px solid var(--border)}
+
+  /* 작업 카드 */
+  .task-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;overflow:hidden}
+  .task-card.completed{opacity:.55;border-left:3px solid var(--green)}
+  .task-card.outsource{border-left:3px solid var(--red)}
+  .task-card.completed.outsource{border-left:3px solid var(--green)}
+  .task-card.has-note{border-right:3px solid var(--orange)}
+  .task-header{display:flex;align-items:flex-start;padding:12px;gap:10px;cursor:pointer;user-select:none}
+  .task-no{font-size:11px;color:var(--text3);font-weight:700;min-width:20px;text-align:center;flex-shrink:0;padding-top:2px}
+  .task-header-info{flex:1;min-width:0}
+  .task-desc-preview{font-size:13px;font-weight:500;line-height:1.4;word-break:keep-all}
+  .task-desc-preview.done-text{text-decoration:line-through;color:var(--text3)}
+  .task-note-preview{font-size:10px;color:var(--red);margin-top:3px;font-weight:600}
+  .task-meta{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center}
+  .tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px}
+  .tag.out-t{background:rgba(255,77,109,.15);color:var(--red);border:1px solid rgba(255,77,109,.3)}
+  .tag.self-t{background:rgba(139,146,184,.1);color:var(--text2);border:1px solid var(--border)}
+  .tag.person-t{background:rgba(61,111,255,.1);color:var(--accent);border:1px solid rgba(61,111,255,.2)}
+  .tag.done-t{background:rgba(6,214,160,.1);color:var(--green);border:1px solid rgba(6,214,160,.3)}
+  .task-header-right{display:flex;gap:6px;align-items:center;flex-shrink:0}
+  .check-btn{width:30px;height:30px;border-radius:50%;border:2px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;color:transparent;flex-shrink:0;transition:all .2s}
+  .check-btn.checked{background:var(--green);border-color:var(--green);color:#fff}
+  .del-btn{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,77,109,.3);background:rgba(255,77,109,.08);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--red);flex-shrink:0}
+  .task-body{padding:0 12px 12px;border-top:1px solid var(--border);display:none}
+  .task-body.open{display:block}
+  .task-save-btn{width:100%;padding:10px;background:rgba(61,111,255,.15);color:var(--accent);border:1px solid rgba(61,111,255,.3);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px}
+
+  /* 이력 */
+  .history-wrap{padding:12px}
+  .date-row{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+  .date-row label{font-size:12px;color:var(--text2);white-space:nowrap}
+  .date-input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none}
+  .date-input:focus{border-color:var(--accent)}
+  .hist-group{margin-bottom:14px}
+  .hist-title{font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;margin-bottom:6px}
+  .hist-title.out-t{background:rgba(255,77,109,.1);color:var(--red)}
+  .hist-title.in-t{background:rgba(6,214,160,.1);color:var(--green)}
+  .hist-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+  .hist-name{font-size:13px;font-weight:700}
+  .hist-meta{font-size:11px;color:var(--text2);margin-top:2px}
+  .hist-time{font-size:11px;color:var(--text3)}
+
+  /* 구역 관리 */
+  .region-manage-wrap{padding:12px}
+  .region-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .region-item input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:13px;font-family:inherit;outline:none}
+  .region-item input:focus{border-color:var(--accent)}
+  .region-save-btn{padding:7px 12px;background:rgba(61,111,255,.15);color:var(--accent);border:1px solid rgba(61,111,255,.3);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .region-del-btn{width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,77,109,.3);background:rgba(255,77,109,.08);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--red);flex-shrink:0}
+  .add-region-row{display:flex;gap:8px;margin-top:8px}
+  .add-region-input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none}
+  .add-region-btn{padding:9px 16px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+
+  .group-header{padding:10px 12px 2px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1px}
+
+  .section{display:none}.section.active{display:block}
+  .sub-sec{display:none}.sub-sec.active{display:block}
+
+  .fab{position:fixed;bottom:24px;right:20px;width:54px;height:54px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:26px;cursor:pointer;box-shadow:0 4px 24px rgba(61,111,255,.45);z-index:200;display:flex;align-items:center;justify-content:center;transition:transform .15s}
+  .fab:active{transform:scale(.9)}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;display:none;align-items:flex-end;justify-content:center}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border-radius:20px 20px 0 0;width:100%;max-width:500px;padding:24px 20px;padding-bottom:calc(24px + env(safe-area-inset-bottom));max-height:90vh;overflow-y:auto}
+  .modal-title{font-size:16px;font-weight:700;margin-bottom:4px}
+  .modal-sub{font-size:11px;color:var(--text2);margin-bottom:16px}
+  .field-label{font-size:11px;color:var(--text3);display:block;margin-bottom:5px;margin-top:14px;font-weight:500}
+  .modal input,.modal textarea,.modal select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;color:var(--text);font-size:13px;font-family:inherit;outline:none;resize:none;-webkit-appearance:none}
+  .modal input:focus,.modal textarea:focus,.modal select:focus{border-color:var(--accent)}
+  .modal-btns{display:flex;gap:8px;margin-top:18px}
+  .modal-btn{flex:1;padding:13px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+  .modal-btn.cancel{background:var(--surface2);color:var(--text2)}
+  .modal-btn.confirm{background:var(--accent);color:#fff}
+
+  .confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:400;display:none;align-items:center;justify-content:center;padding:20px}
+  .confirm-overlay.open{display:flex}
+  .confirm-box{background:var(--surface);border-radius:18px;padding:22px 20px;width:100%;max-width:320px}
+  .confirm-title{font-size:15px;font-weight:700;margin-bottom:8px}
+  .confirm-desc{font-size:12px;margin-bottom:20px;background:var(--surface2);padding:10px 12px;border-radius:8px;color:var(--text);font-weight:700;line-height:1.5}
+  .confirm-btns{display:flex;gap:8px}
+  .confirm-btn{flex:1;padding:12px;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .confirm-btn.cancel{background:var(--surface2);color:var(--text2)}
+  .confirm-btn.del{background:rgba(255,77,109,.15);color:var(--red);border:1px solid rgba(255,77,109,.3)}
+
+  .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:10px 20px;font-size:12px;color:var(--text);opacity:0;transition:all .3s;z-index:999;white-space:nowrap;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .empty-msg{text-align:center;padding:40px 20px;color:var(--text3);font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚙️ 정기보수 통합 관리</h1>
+  <p>전동기 관리 · 작업리스트</p>
+</div>
+
+<div class="main-tabs">
+  <div class="main-tab motor active" onclick="switchMain('motor')">⚙️ 전동기 관리</div>
+  <div class="main-tab task"         onclick="switchMain('task')">📋 작업리스트</div>
+</div>
+
+<div id="sec-motor" class="section active">
+  <div class="sub-tabs" id="mSubTabs"></div>
+  <div id="mSubContents"></div>
+</div>
+
+<div id="sec-task" class="section">
+  <div class="sub-tabs" id="tSubTabs"></div>
+  <div id="tSubContents"></div>
+</div>
+
+<button class="fab" onclick="openAddModal()">＋</button>
+
+<div class="modal-overlay" id="addModal" onclick="if(event.target===this)closeAddModal()">
+  <div class="modal" id="addModalInner"></div>
+</div>
+
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-title" id="confirmTitle">삭제</div>
+    <div class="confirm-desc" id="confirmDesc"></div>
+    <div class="confirm-btns">
+      <button class="confirm-btn cancel" onclick="closeConfirm()">취소</button>
+      <button class="confirm-btn del"    onclick="doDelete()">삭제</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══ 초기 데이터 ══════════════════════════════════════
+
+const INIT_REGIONS = ['#2 PAP','#3 PAP','가소제','열분해소각로'];
+
+const INIT_MOTORS = [
+  // #2 PAP
+  {id:'p2-1',region:'#2 PAP',name:'P-1902B',kw:'45',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p2-2',region:'#2 PAP',name:'P-1904A',kw:'90',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p2-3',region:'#2 PAP',name:'P-1905A',kw:'15',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p2-4',region:'#2 PAP',name:'P-1910A',kw:'7.5',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p2-5',region:'#2 PAP',name:'P-1913B',kw:'37',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p2-6',region:'#2 PAP',name:'P-1914A',kw:'7.5',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p2-7',region:'#2 PAP',name:'P-1914B',kw:'7.5',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p2-8',region:'#2 PAP',name:'P-1922B',kw:'5.5',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p2-9',region:'#2 PAP',name:'P-1929B',kw:'5.5',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p2-10',region:'#2 PAP',name:'P-1932A',kw:'15',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  // #3 PAP
+  {id:'p3-1',region:'#3 PAP',name:'P-2903B',kw:'7.5',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p3-2',region:'#3 PAP',name:'P-2904B',kw:'85',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p3-3',region:'#3 PAP',name:'P-2905A',kw:'32',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p3-4',region:'#3 PAP',name:'P-2910A',kw:'15',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p3-5',region:'#3 PAP',name:'P-2910B',kw:'15',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p3-6',region:'#3 PAP',name:'P-2911A',kw:'45',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p3-7',region:'#3 PAP',name:'P-2934',kw:'5.5',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  {id:'p3-8',region:'#3 PAP',name:'P-2990C',kw:'3.7',location:'',status:'none',exportDate:'',importDate:'',note:''},
+  // 열분해소각로
+  {id:'yb-1',region:'열분해소각로',name:'P-3901B',kw:'',location:'',status:'none',exportDate:'',importDate:'',note:''},
+];
+
+const INIT_TASKS = [
+  // #2 PAP
+  {id:'wp2-1',region:'#2 PAP',no:1,type:'외주',person:'진상현',desc:'[전기] Motor 수리',done:false,note:''},
+  {id:'wp2-2',region:'#2 PAP',no:2,type:'자체',person:'손은택',desc:'[전기] Motor 절연저항 Check.',done:false,note:''},
+  {id:'wp2-3',region:'#2 PAP',no:3,type:'자체',person:'이인교',desc:'[전기] 접지저항 Check 및 수리.',done:false,note:''},
+  {id:'wp2-4',region:'#2 PAP',no:4,type:'자체',person:'진상현',desc:"[전기] #2 변압기 중점설비 점검(4가지 항목)",done:false,note:''},
+  {id:'wp2-5',region:'#2 PAP',no:5,type:'자체',person:'손은택',desc:'[전기] #1,2 UPS 중점설비 점검(4가지 항목)',done:false,note:''},
+  {id:'wp2-6',region:'#2 PAP',no:6,type:'자체',person:'이인교',desc:"[전기] TB-1908 내부 LCP' 점검 및 Speed Meter 점검.",done:false,note:''},
+  {id:'wp2-7',region:'#2 PAP',no:7,type:'자체',person:'진상현',desc:'[전기] 과전류 계전기 Over setting 보정.',done:false,note:''},
+  {id:'wp2-8',region:'#2 PAP',no:8,type:'자체',person:'손은택',desc:'[전기] 과전류 계전기 동작 시험 및 회로 구성 정상화 점검.',done:false,note:''},
+  {id:'wp2-9',region:'#2 PAP',no:9,type:'자체',person:'손은택',desc:'[전기] SP-1901 점검',done:false,note:''},
+  {id:'wp2-10',region:'#2 PAP',no:10,type:'자체',person:'진상현',desc:"[전기] MX-1902 교체 관련 해선/결선 & 취외/취부 (요청 시 진행)",done:false,note:''},
+  // #3 PAP
+  {id:'wp3-1',region:'#3 PAP',no:1,type:'외주',person:'진상현',desc:'[전기] Motor 수리',done:false,note:''},
+  {id:'wp3-2',region:'#3 PAP',no:2,type:'자체',person:'손은택',desc:'[전기] Motor 절연저항 Check.',done:false,note:''},
+  {id:'wp3-3',region:'#3 PAP',no:3,type:'자체',person:'이인교',desc:'[전기] #3 변압기 중점설비 점검(4가지 항목)',done:false,note:''},
+  {id:'wp3-4',region:'#3 PAP',no:4,type:'자체',person:'진상현',desc:'[전기] #3 UPS 중점설비 점검(4가지 항목)',done:false,note:''},
+  {id:'wp3-5',region:'#3 PAP',no:5,type:'자체',person:'손은택',desc:'[전기] MX-2901 고압 MOTOR 절연 진단',done:false,note:''},
+  {id:'wp3-6',region:'#3 PAP',no:6,type:'자체',person:'이인교',desc:'[전기] MX-2901 PNL 점검',done:false,note:''},
+  {id:'wp3-7',region:'#3 PAP',no:7,type:'자체',person:'진상현',desc:"[전기] TB-1908 내부 LCP' 점검 및 Speed Meter 개선 CABLE 교체.",done:false,note:''},
+  {id:'wp3-8',region:'#3 PAP',no:8,type:'자체',person:'손은택',desc:'[전기] 과전류 계전기 Over setting 보정.',done:false,note:''},
+  {id:'wp3-9',region:'#3 PAP',no:9,type:'자체',person:'이인교',desc:'[전기] 과전류 계전기 동작 시험 및 회로 구성 정상화 점검.',done:false,note:''},
+  {id:'wp3-10',region:'#3 PAP',no:10,type:'외주',person:'손은택',desc:'[전기] Turbine Speed Sensor Cable 교체',done:false,note:''},
+  // 가소제
+  {id:'wgs-1',region:'가소제',no:1,type:'자체',person:'고승찬·김지윤',desc:'[계기] N2 PRV 취외 점검 or 교체',done:false,note:''},
+  {id:'wgs-2',region:'가소제',no:2,type:'자체',person:'고승찬·김지윤',desc:'[계기] FQI-5132 불량(25년 하반기 검교정 불가판정으로 취부만 함, MASS TYPE)',done:false,note:''},
+  {id:'wgs-3',region:'가소제',no:3,type:'외주',person:'형성완',desc:'[계기] FCV-5530 보수 반풀',done:false,note:''},
+  {id:'wgs-4',region:'가소제',no:4,type:'외주',person:'형성완',desc:'[계기] UV-5537 교체',done:false,note:''},
+  {id:'wgs-5',region:'가소제',no:5,type:'외주',person:'진상현',desc:'[전기] Motor 수리',done:false,note:''},
+  {id:'wgs-6',region:'가소제',no:6,type:'자체',person:'손은택',desc:'[전기] Motor 절연저항 Check.',done:false,note:''},
+  // 열분해소각로
+  {id:'wyb-1',region:'열분해소각로',no:1,type:'외주',person:'진상현',desc:'[전기] Motor 수리',done:false,note:''},
+  {id:'wyb-2',region:'열분해소각로',no:2,type:'자체',person:'손은택·이인교',desc:'[계기] THERMAL TI CONTROLER 교체(TI-3951A/B, 대체품 수배중)',done:false,note:''},
+  {id:'wyb-3',region:'열분해소각로',no:3,type:'자체',person:'고승찬·김지윤',desc:'[계기] THERMAL TI (구매 완료, Tag 교체 진행)',done:false,note:''},
+  {id:'wyb-4',region:'열분해소각로',no:4,type:'자체',person:'고승찬·김지윤·손은택',desc:'[계기] THERMAL TI 취외 실측 (25년 미점검 개소 취외 점검)',done:false,note:''},
+  {id:'wyb-5',region:'열분해소각로',no:5,type:'자체',person:'이인교',desc:'[계기] Flame Eye 점검',done:false,note:''},
+];
+
+// ══ 저장/불러오기 ════════════════════════════════════
+const VER = 'v1';
+function LS(key){try{const s=localStorage.getItem(key);if(s)return JSON.parse(s);}catch(e){}return null;}
+function SS(key,val){localStorage.setItem(key,JSON.stringify(val));}
+
+let regions = LS('regions_'+VER) || [...INIT_REGIONS];
+let motors  = LS('motors_'+VER)  || INIT_MOTORS.map(m=>({...m}));
+let mHist   = LS('mhist_'+VER)   || [];
+let tasks   = LS('tasks_'+VER)   || INIT_TASKS.map(t=>({...t}));
+
+let curMain='motor', curMR='전체', curTR='전체', pendingDel=null;
+
+function today(){return new Date().toISOString().split('T')[0];}
+function nowTime(){return new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+// ══ 메인탭 ═══════════════════════════════════════════
+function switchMain(tab){
+  curMain=tab;
+  document.querySelectorAll('.main-tab').forEach(el=>el.classList.remove('active'));
+  document.querySelector('.main-tab.'+tab).classList.add('active');
+  document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
+  document.getElementById('sec-'+tab).classList.add('active');
+}
+
+// ══ 전동기 서브탭 ════════════════════════════════════
+function buildMSubTabs(){
+  const tabs=['전체',...regions,'이력'];
+  document.getElementById('mSubTabs').innerHTML =
+    tabs.map(r=>`<div class="sub-tab${r===curMR?' active':''}" onclick="switchMR('${esc(r)}')">${r}</div>`).join('')+
+    `<div class="sub-tab-gear" onclick="openRegionManage('motor')">⚙️</div>`;
+
+  document.getElementById('mSubContents').innerHTML =
+    tabs.map(r=>`<div id="ms_${esc(r)}" class="sub-sec${r===curMR?' active':''}">
+      ${r==='이력'
+        ?`<div class="history-wrap"><div class="date-row"><label>날짜 선택</label><input type="date" class="date-input" id="mHistDate" onchange="renderMHist()"></div><div id="mHistContent"></div></div>`
+        :r==='전체'
+          ?`<div class="summary" id="msum_전체"></div><div class="controls"><input class="search-box" placeholder="🔍 전동기 검색..." oninput="filterMotors(this.value)"></div><div class="item-list" id="mlist_전체"></div>`
+          :`<div class="summary" id="msum_${esc(r)}"></div><div class="item-list" id="mlist_${esc(r)}"></div>`
+      }
+    </div>`).join('');
+
+  const hd=document.getElementById('mHistDate');
+  if(hd&&!hd.value) hd.value=today();
+}
+
+function switchMR(r){
+  curMR=r;
+  document.querySelectorAll('#mSubTabs .sub-tab').forEach(el=>el.classList.toggle('active',el.textContent===r));
+  document.querySelectorAll('#mSubContents .sub-sec').forEach(el=>el.classList.remove('active'));
+  const el=document.getElementById('ms_'+r); if(el) el.classList.add('active');
+  if(r==='이력'){const hd=document.getElementById('mHistDate');if(hd&&!hd.value)hd.value=today();}
+}
+
+function renderMotors(){
+  const allR=['전체',...regions];
+  allR.forEach(r=>{
+    const list=r==='전체'?[...motors]:motors.filter(m=>m.region===r);
+    list.sort((a,b)=>a.name.localeCompare(b.name));
+    // 요약
+    const sel=document.getElementById('msum_'+r); if(!sel) return;
+    const exp=list.filter(m=>m.status==='exported').length;
+    const imp=list.filter(m=>m.status==='imported').length;
+    sel.innerHTML=`
+      <div class="stat-card total"><div class="num">${list.length}</div><div class="lbl">전체</div></div>
+      <div class="stat-card out"><div class="num">${exp}</div><div class="lbl">반출중</div></div>
+      <div class="stat-card in"><div class="num">${imp}</div><div class="lbl">수리완료</div></div>`;
+    // 리스트
+    const lel=document.getElementById('mlist_'+r); if(!lel) return;
+    if(!list.length){lel.innerHTML='<div class="empty-msg">등록된 전동기가 없습니다</div>';return;}
+    if(r==='전체'){
+      lel.innerHTML=regions.map(rr=>{
+        const rl=list.filter(m=>m.region===rr);
+        return rl.length?`<div class="group-header">${rr}</div>`+rl.map(m=>motorCard(m,r)).join(''):'';
+      }).join('');
+    }else{
+      lel.innerHTML=list.map(m=>motorCard(m,r)).join('');
+    }
+  });
+}
+
+function filterMotors(q){
+  const list=q?motors.filter(m=>m.name.toLowerCase().includes(q.toLowerCase())||(m.location||'').toLowerCase().includes(q.toLowerCase())):[...motors];
+  list.sort((a,b)=>a.name.localeCompare(b.name));
+  const lel=document.getElementById('mlist_전체'); if(!lel) return;
+  if(!list.length){lel.innerHTML='<div class="empty-msg">검색 결과가 없습니다</div>';return;}
+  lel.innerHTML=regions.map(rr=>{
+    const rl=list.filter(m=>m.region===rr);
+    return rl.length?`<div class="group-header">${rr}</div>`+rl.map(m=>motorCard(m,'전체')).join(''):'';
+  }).join('');
+}
+
+function motorCard(m, tabKey){
+  const uid = esc(tabKey)+'__'+m.id;
+  const cls=m.status==='exported'?'exported':m.status==='imported'?'imported':'';
+  const bCls=m.status==='exported'?'out':m.status==='imported'?'in':'none';
+  const bTxt=m.status==='exported'?'반출':m.status==='imported'?'수리완료':'정상';
+  const hasNote=!!(m.note&&m.note.trim());
+  let si='';
+  if(m.status==='exported'&&m.exportDate) si=`<div class="status-info">반출일: <span class="red">${m.exportDate}</span></div>`;
+  else if(m.status==='imported'&&m.importDate) si=`<div class="status-info">반입일: <span class="green">${m.importDate}</span> · 수리완료</div>`;
+  const regionOpts=regions.map(r=>`<option value="${esc(r)}"${r===m.region?' selected':''}>${r}</option>`).join('');
+  return `
+<div class="motor-card ${cls}${hasNote?' has-note':''}" id="mc_${uid}">
+  <div class="motor-header" onclick="toggleBody('mb_${uid}')">
+    <div style="flex:1;min-width:0">
+      <div class="motor-name">${m.name}</div>
+      <div class="motor-sub">${m.region}${m.kw?' · '+m.kw+'kW':''}${m.location?' · '+m.location:''}</div>
+      ${hasNote?`<div class="motor-note-preview">⚠️ ${m.note}</div>`:''}
+    </div>
+    <div class="motor-right">
+      <button class="del-btn" onclick="event.stopPropagation();confirmDel('motor','${m.id}','${esc(m.name)}')">✕</button>
+      <span class="badge ${bCls}">${bTxt}</span>
+    </div>
+  </div>
+  <div class="motor-body" id="mb_${uid}">
+    <div class="edit-grid">
+      <div class="edit-item full"><label>이름 (ITEM NO)</label><input id="mn_${uid}" value="${esc(m.name)}" placeholder="이름"></div>
+      <div class="edit-item full"><label>구역</label><select id="mr_${uid}">${regionOpts}</select></div>
+      <div class="edit-item"><label>용량 (kW)</label><input id="mk_${uid}" value="${esc(m.kw)}" placeholder="kW"></div>
+      <div class="edit-item"><label>위치</label><input id="ml_${uid}" value="${esc(m.location)}" placeholder="위치"></div>
+      <div class="edit-item full"><label>⚠️ 특이사항</label><textarea class="note-input" id="mo_${uid}" rows="2" placeholder="특이사항 입력">${esc(m.note)}</textarea></div>
+    </div>
+    ${si}
+    <div class="action-row">
+      <button class="btn btn-out"  onclick="setMS('${m.id}','exported')">📤 반출</button>
+      <button class="btn btn-in"   onclick="setMS('${m.id}','imported')">📥 반입</button>
+      <button class="btn btn-save" onclick="saveM('${m.id}','${uid}')">💾 저장</button>
+      <button class="btn btn-reset"onclick="setMS('${m.id}','none')">↩</button>
+    </div>
+  </div>
+</div>`;
+}
+
+function toggleBody(id){
+  const el=document.getElementById(id); if(el) el.classList.toggle('open');
+}
+
+function saveM(mid, uid){
+  const m=motors.find(x=>x.id===mid); if(!m) return;
+  const n=document.getElementById('mn_'+uid)?.value.trim().toUpperCase(); if(n) m.name=n;
+  const r=document.getElementById('mr_'+uid)?.value; if(r) m.region=r;
+  m.kw=document.getElementById('mk_'+uid)?.value.trim()||'';
+  m.location=document.getElementById('ml_'+uid)?.value.trim()||'';
+  m.note=document.getElementById('mo_'+uid)?.value.trim()||'';
+  SS('motors_'+VER,motors); showToast('✅ 저장되었습니다'); renderMotors();
+}
+
+function setMS(mid, status){
+  const m=motors.find(x=>x.id===mid); if(!m) return;
+  if(status==='exported'){
+    if(m.status==='exported'){showToast('이미 반출된 전동기입니다');return;}
+    m.status='exported';m.exportDate=today();m.importDate='';
+    mHist.push({name:m.name,region:m.region,kw:m.kw,location:m.location,action:'exported',date:today(),time:nowTime()});
+    showToast('📤 반출 처리되었습니다');
+  }else if(status==='imported'){
+    if(m.status==='imported'){showToast('이미 수리완료된 전동기입니다');return;}
+    m.status='imported';m.importDate=today();
+    mHist.push({name:m.name,region:m.region,kw:m.kw,location:m.location,action:'imported',date:today(),time:nowTime()});
+    showToast('📥 반입(수리완료) 처리되었습니다');
+  }else{
+    m.status='none';m.exportDate='';m.importDate='';showToast('↩ 초기화되었습니다');
+  }
+  SS('motors_'+VER,motors);SS('mhist_'+VER,mHist);renderMotors();
+}
+
+function renderMHist(){
+  const date=document.getElementById('mHistDate')?.value;
+  const el=document.getElementById('mHistContent'); if(!date||!el) return;
+  const day=mHist.filter(h=>h.date===date);
+  if(!day.length){el.innerHTML=`<div class="empty-msg">${date}<br>이력이 없습니다</div>`;return;}
+  const row=h=>`<div class="hist-item"><div><div class="hist-name">${h.name}</div><div class="hist-meta">${h.region}${h.kw?' · '+h.kw+'kW':''}${h.location?' · '+h.location:''}</div></div><div class="hist-time">${h.time||''}</div></div>`;
+  const outs=day.filter(h=>h.action==='exported'), ins=day.filter(h=>h.action==='imported');
+  let html='';
+  if(outs.length) html+=`<div class="hist-group"><div class="hist-title out-t">📤 반출 (${outs.length}건)</div>${outs.map(row).join('')}</div>`;
+  if(ins.length)  html+=`<div class="hist-group"><div class="hist-title in-t">📥 반입·수리완료 (${ins.length}건)</div>${ins.map(row).join('')}</div>`;
+  el.innerHTML=html;
+}
+
+// ══ 작업 서브탭 ══════════════════════════════════════
+function buildTSubTabs(){
+  const tabs=['전체',...regions];
+  document.getElementById('tSubTabs').innerHTML =
+    tabs.map(r=>`<div class="sub-tab${r===curTR?' active':''}" onclick="switchTR('${esc(r)}')">${r}</div>`).join('')+
+    `<div class="sub-tab-gear" onclick="openRegionManage('task')">⚙️</div>`;
+
+  document.getElementById('tSubContents').innerHTML =
+    tabs.map(r=>`<div id="ts_${esc(r)}" class="sub-sec${r===curTR?' active':''}">
+      <div class="summary" id="tsum_${esc(r)}"></div>
+      <div class="progress-wrap" id="tprog_${esc(r)}"></div>
+      <div class="item-list" id="tlist_${esc(r)}"></div>
+    </div>`).join('');
+}
+
+function switchTR(r){
+  curTR=r;
+  document.querySelectorAll('#tSubTabs .sub-tab').forEach(el=>el.classList.toggle('active',el.textContent===r));
+  document.querySelectorAll('#tSubContents .sub-sec').forEach(el=>el.classList.remove('active'));
+  const el=document.getElementById('ts_'+r); if(el) el.classList.add('active');
+}
+
+function renderTasks(){
+  const allR=['전체',...regions];
+  allR.forEach(r=>{
+    const list=r==='전체'?tasks:tasks.filter(t=>t.region===r);
+    const done=list.filter(t=>t.done).length;
+    const sel=document.getElementById('tsum_'+r); if(!sel) return;
+    sel.innerHTML=`
+      <div class="stat-card total"><div class="num">${list.length}</div><div class="lbl">전체</div></div>
+      <div class="stat-card done"><div class="num">${done}</div><div class="lbl">완료</div></div>
+      <div class="stat-card remain"><div class="num">${list.length-done}</div><div class="lbl">미완료</div></div>`;
+    const pel=document.getElementById('tprog_'+r);
+    if(pel){
+      const pct=list.length?Math.round(done/list.length*100):0;
+      pel.innerHTML=`<div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%"></div></div><div class="progress-label">${pct}% 완료</div>`;
+    }
+    const lel=document.getElementById('tlist_'+r); if(!lel) return;
+    if(!list.length){lel.innerHTML='<div class="empty-msg">등록된 작업이 없습니다</div>';return;}
+    if(r==='전체'){
+      lel.innerHTML=regions.map(rr=>{
+        const rl=list.filter(t=>t.region===rr);
+        return rl.length?`<div class="group-header">${rr}</div>`+rl.map(t=>taskCard(t,r)).join(''):'';
+      }).join('');
+    }else{
+      lel.innerHTML=list.map(t=>taskCard(t,r)).join('');
+    }
+  });
+}
+
+function taskCard(t, tabKey){
+  const uid=esc(tabKey)+'__'+t.id;
+  const isOut=t.type==='외주';
+  const hasNote=!!(t.note&&t.note.trim());
+  const regionOpts=regions.map(r=>`<option value="${esc(r)}"${r===t.region?' selected':''}>${r}</option>`).join('');
+  return `
+<div class="task-card ${t.done?'completed':''} ${isOut&&!t.done?'outsource':''} ${hasNote?'has-note':''}" id="tc_${uid}">
+  <div class="task-header" onclick="toggleBody('tb_${uid}')">
+    <div class="task-no">${t.no}</div>
+    <div class="task-header-info">
+      <div class="task-desc-preview ${t.done?'done-text':''}">${t.desc}</div>
+      ${hasNote?`<div class="task-note-preview">⚠️ ${t.note}</div>`:''}
+      <div class="task-meta">
+        <span class="tag ${isOut?'out-t':'self-t'}">${t.type}</span>
+        <span class="tag person-t">👤 ${t.person}</span>
+        ${t.done?'<span class="tag done-t">✅ 완료</span>':''}
+      </div>
+    </div>
+    <div class="task-header-right">
+      <button class="del-btn" onclick="event.stopPropagation();confirmDel('task','${t.id}','${esc(t.desc.slice(0,25))}')">✕</button>
+      <button class="check-btn ${t.done?'checked':''}" onclick="event.stopPropagation();toggleDone('${t.id}')">✓</button>
+    </div>
+  </div>
+  <div class="task-body" id="tb_${uid}">
+    <div class="edit-grid">
+      <div class="edit-item full"><label>구역</label><select id="tr_${uid}">${regionOpts}</select></div>
+      <div class="edit-item full"><label>작업 내용</label><textarea id="td_${uid}" rows="3">${esc(t.desc)}</textarea></div>
+      <div class="edit-item"><label>수리 구분</label>
+        <select id="tt_${uid}">
+          <option value="자체"${t.type==='자체'?' selected':''}>자체</option>
+          <option value="외주"${t.type==='외주'?' selected':''}>외주</option>
+        </select>
+      </div>
+      <div class="edit-item"><label>담당자</label><input id="tp_${uid}" value="${esc(t.person)}" placeholder="담당자"></div>
+      <div class="edit-item full"><label>⚠️ 특이사항</label><textarea class="note-input" id="tn_${uid}" rows="2" placeholder="특이사항 입력">${esc(t.note)}</textarea></div>
+    </div>
+    <button class="task-save-btn" onclick="saveT('${t.id}','${uid}')">💾 저장</button>
+  </div>
+</div>`;
+}
+
+function toggleDone(tid){
+  const t=tasks.find(x=>x.id===tid); if(!t) return;
+  t.done=!t.done; SS('tasks_'+VER,tasks);
+  showToast(t.done?'✅ 완료 처리되었습니다':'↩ 완료 취소되었습니다');
+  renderTasks();
+}
+
+function saveT(tid, uid){
+  const t=tasks.find(x=>x.id===tid); if(!t) return;
+  const oldR=t.region;
+  const newR=document.getElementById('tr_'+uid)?.value; if(newR) t.region=newR;
+  t.desc=document.getElementById('td_'+uid)?.value.trim()||t.desc;
+  t.type=document.getElementById('tt_'+uid)?.value||t.type;
+  t.person=document.getElementById('tp_'+uid)?.value.trim()||t.person;
+  t.note=document.getElementById('tn_'+uid)?.value.trim()||'';
+  if(newR&&newR!==oldR){
+    let i=1;tasks.filter(x=>x.region===oldR).forEach(x=>{x.no=i++;});
+    t.no=tasks.filter(x=>x.region===newR).length;
+  }
+  SS('tasks_'+VER,tasks); showToast('✅ 저장되었습니다'); renderTasks();
+}
+
+// ══ 구역 관리 ════════════════════════════════════════
+let managingFor='motor';
+function openRegionManage(forWhat){
+  managingFor=forWhat;
+  renderRegionModal();
+  document.getElementById('addModal').classList.add('open');
+}
+
+function renderRegionModal(){
+  document.getElementById('addModalInner').innerHTML=`
+    <div class="modal-title">⚙️ 구역 관리</div>
+    <div class="modal-sub">구역 이름 수정 · 추가 · 삭제</div>
+    <div class="region-manage-wrap" id="regionList"></div>
+    <div class="add-region-row">
+      <input class="add-region-input" id="newRegionInput" placeholder="새 구역 이름">
+      <button class="add-region-btn" onclick="addRegion()">추가</button>
+    </div>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="modal-btn cancel" onclick="closeAddModal()">닫기</button>
+    </div>`;
+  refreshRegionList();
+}
+
+function refreshRegionList(){
+  const el=document.getElementById('regionList'); if(!el) return;
+  el.innerHTML=regions.map((r,i)=>`
+    <div class="region-item">
+      <input id="ri_${i}" value="${esc(r)}" placeholder="구역 이름">
+      <button class="region-save-btn" onclick="saveRegion(${i})">저장</button>
+      <button class="region-del-btn" onclick="deleteRegion(${i})">✕</button>
+    </div>`).join('');
+}
+
+function saveRegion(i){
+  const n=document.getElementById('ri_'+i)?.value.trim(); if(!n){showToast('⚠️ 이름 입력');return;}
+  const old=regions[i]; regions[i]=n;
+  motors.forEach(m=>{if(m.region===old)m.region=n;});
+  tasks.forEach(t=>{if(t.region===old)t.region=n;});
+  if(curMR===old)curMR=n; if(curTR===old)curTR=n;
+  SS('regions_'+VER,regions);SS('motors_'+VER,motors);SS('tasks_'+VER,tasks);
+  showToast('✅ 구역 이름 변경');
+  rebuildAll(); refreshRegionList();
+}
+
+function addRegion(){
+  const n=document.getElementById('newRegionInput')?.value.trim();
+  if(!n){showToast('⚠️ 이름 입력');return;}
+  if(regions.includes(n)){showToast('⚠️ 이미 존재');return;}
+  regions.push(n); document.getElementById('newRegionInput').value='';
+  SS('regions_'+VER,regions); showToast('➕ 구역 추가');
+  rebuildAll(); refreshRegionList();
+}
+
+function deleteRegion(i){
+  const r=regions[i];
+  if(motors.some(m=>m.region===r)||tasks.some(t=>t.region===r)){
+    showToast('⚠️ 데이터가 있어 삭제 불가');return;
+  }
+  regions.splice(i,1);
+  if(curMR===r)curMR='전체'; if(curTR===r)curTR='전체';
+  SS('regions_'+VER,regions); showToast('🗑️ 구역 삭제');
+  rebuildAll(); refreshRegionList();
+}
+
+function rebuildAll(){
+  buildMSubTabs(); renderMotors();
+  buildTSubTabs(); renderTasks();
+}
+
+// ══ 추가 모달 ════════════════════════════════════════
+function openAddModal(){
+  const isM=curMain==='motor';
+  const regionOpts=regions.map(r=>`<option value="${esc(r)}">${r}</option>`).join('');
+  const defR=isM?(curMR!=='전체'&&curMR!=='이력'?curMR:regions[0]):(curTR!=='전체'?curTR:regions[0]);
+  const regionOptsWithDef=regions.map(r=>`<option value="${esc(r)}"${r===defR?' selected':''}>${r}</option>`).join('');
+
+  document.getElementById('addModalInner').innerHTML = isM ? `
+    <div class="modal-title">⚙️ 전동기 추가</div>
+    <div class="modal-sub">새 전동기를 등록합니다</div>
+    <label class="field-label">구역</label><select id="a_region">${regionOptsWithDef}</select>
+    <label class="field-label">전동기 이름 (ITEM NO)</label><input id="a_name" placeholder="예) P-001A">
+    <label class="field-label">용량 (kW)</label><input id="a_kw" placeholder="예) 37">
+    <label class="field-label">위치</label><input id="a_loc" placeholder="예) 드라이어 하부">
+    <label class="field-label">⚠️ 특이사항 (선택)</label><textarea id="a_note" rows="2" placeholder="특이사항 입력"></textarea>
+    <div class="modal-btns"><button class="modal-btn cancel" onclick="closeAddModal()">취소</button><button class="modal-btn confirm" onclick="addMotor()">추가</button></div>
+  ` : `
+    <div class="modal-title">📋 작업 추가</div>
+    <div class="modal-sub">정기보수 작업을 추가합니다</div>
+    <label class="field-label">구역</label><select id="a_region">${regionOptsWithDef}</select>
+    <label class="field-label">작업 내용</label><textarea id="a_desc" rows="3" placeholder="작업 내용 입력"></textarea>
+    <label class="field-label">수리 구분</label><select id="a_type"><option>자체</option><option>외주</option></select>
+    <label class="field-label">담당자</label><input id="a_person" placeholder="예) 박병근">
+    <label class="field-label">⚠️ 특이사항 (선택)</label><textarea id="a_note" rows="2" placeholder="특이사항 입력"></textarea>
+    <div class="modal-btns"><button class="modal-btn cancel" onclick="closeAddModal()">취소</button><button class="modal-btn confirm" onclick="addTask()">추가</button></div>
+  `;
+  document.getElementById('addModal').classList.add('open');
+}
+
+function closeAddModal(){document.getElementById('addModal').classList.remove('open');}
+
+function addMotor(){
+  const region=document.getElementById('a_region').value;
+  const name=document.getElementById('a_name').value.trim().toUpperCase();
+  const kw=document.getElementById('a_kw').value.trim();
+  const loc=document.getElementById('a_loc').value.trim();
+  const note=document.getElementById('a_note').value.trim();
+  if(!name){showToast('⚠️ 이름 입력');return;}
+  if(motors.find(m=>m.name===name&&m.region===region)){showToast('⚠️ 이미 존재');return;}
+  motors.push({id:'m'+Date.now(),region,name,kw,location:loc,status:'none',exportDate:'',importDate:'',note});
+  SS('motors_'+VER,motors); closeAddModal(); showToast('➕ 전동기 추가'); renderMotors();
+}
+
+function addTask(){
+  const region=document.getElementById('a_region').value;
+  const desc=document.getElementById('a_desc').value.trim();
+  const type=document.getElementById('a_type').value;
+  const person=document.getElementById('a_person').value.trim();
+  const note=document.getElementById('a_note').value.trim();
+  if(!desc){showToast('⚠️ 작업 내용 입력');return;}
+  if(!person){showToast('⚠️ 담당자 입력');return;}
+  const rt=tasks.filter(t=>t.region===region);
+  const maxNo=rt.length?Math.max(...rt.map(t=>t.no)):0;
+  tasks.push({id:'t'+Date.now(),region,no:maxNo+1,type,person,desc,done:false,note});
+  SS('tasks_'+VER,tasks); closeAddModal(); showToast('➕ 작업 추가'); renderTasks();
+}
+
+// ══ 삭제 ════════════════════════════════════════════
+function confirmDel(type,id,label){
+  pendingDel={type,id};
+  document.getElementById('confirmTitle').textContent=type==='motor'?'🗑️ 전동기 삭제':'🗑️ 작업 삭제';
+  document.getElementById('confirmDesc').textContent=label;
+  document.getElementById('confirmOverlay').classList.add('open');
+}
+function closeConfirm(){pendingDel=null;document.getElementById('confirmOverlay').classList.remove('open');}
+function doDelete(){
+  if(!pendingDel) return;
+  const {type,id}=pendingDel;
+  if(type==='motor'){
+    motors=motors.filter(m=>m.id!==id);
+    SS('motors_'+VER,motors); closeConfirm(); showToast('🗑️ 전동기 삭제'); renderMotors();
+  }else{
+    const del=tasks.find(t=>t.id===id);
+    tasks=tasks.filter(t=>t.id!==id);
+    if(del){let i=1;tasks.filter(t=>t.region===del.region).forEach(t=>{t.no=i++;});}
+    SS('tasks_'+VER,tasks); closeConfirm(); showToast('🗑️ 작업 삭제'); renderTasks();
+  }
+}
+
+// ══ 토스트 ══════════════════════════════════════════
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+// ══ 초기화 ═══════════════════════════════════════════
+buildMSubTabs();
+renderMotors();
+buildTSubTabs();
+renderTasks();
+</script>
+</body>
+</html>
